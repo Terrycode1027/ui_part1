@@ -48,8 +48,7 @@ class _FateLensWelcomeScreenState extends State<FateLensWelcomeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1100),
     );
-    _fadeAnim =
-        CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _fadeCtrl.forward();
   }
 
@@ -67,7 +66,7 @@ class _FateLensWelcomeScreenState extends State<FateLensWelcomeScreen>
         opacity: _fadeAnim,
         child: Stack(
           children: [
-            // ── 1. 背景 + 星空 + 星球（全部在同一個 Painter）──
+            // ── 1. 動態場景（背景 + 星星 + 星球 + 環形文字）──
             Positioned.fill(
               child: AnimatedBuilder(
                 animation: _orbitCtrl,
@@ -77,12 +76,16 @@ class _FateLensWelcomeScreenState extends State<FateLensWelcomeScreen>
               ),
             ),
 
-            // ── 2. 全畫面靜態噪點（只畫一次）────────────────
+            // ── 2. 全畫面靜態噪點 ─────────────────────────────
+            //    Positioned.fill 確保拿到明確尺寸
+            //    RepaintBoundary 防止被動態場景帶動重繪
             Positioned.fill(
-              child: CustomPaint(painter: _GrainPainter()),
+              child: RepaintBoundary(
+                child: CustomPaint(painter: GrainPainter()),
+              ),
             ),
 
-            // ── 3. 前景 UI ───────────────────────────────────
+            // ── 3. 前景 UI ────────────────────────────────────
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -102,7 +105,8 @@ class _FateLensWelcomeScreenState extends State<FateLensWelcomeScreen>
                                 color: Colors.white, size: 22),
                             const SizedBox(width: 14),
                             Icon(Icons.account_circle_outlined,
-                                color: Colors.white.withOpacity(0.9),
+                                color: Colors.white
+                                    .withValues(alpha: 0.9),
                                 size: 24),
                           ],
                         ),
@@ -126,18 +130,16 @@ class _FateLensWelcomeScreenState extends State<FateLensWelcomeScreen>
 
                     const Spacer(),
 
-                    // 第一段
                     Text(
                       "Whether you're\nseeking direction\ntoday, or simply want\nsomeone to talk to.",
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.88),
+                        color: Colors.white.withValues(alpha: 0.88),
                         fontSize: 15.5,
                         height: 1.65,
                       ),
                     ),
                     const SizedBox(height: 20),
 
-                    // 第二段（加粗）
                     const Text(
                       "We'll always be here with you,\nto shine a little light on your\npath.",
                       style: TextStyle(
@@ -149,10 +151,7 @@ class _FateLensWelcomeScreenState extends State<FateLensWelcomeScreen>
                     ),
 
                     const SizedBox(height: 52),
-
-                    // START 按鈕
                     Center(child: _StartButton()),
-
                     const SizedBox(height: 44),
                   ],
                 ),
@@ -167,7 +166,6 @@ class _FateLensWelcomeScreenState extends State<FateLensWelcomeScreen>
 
 // ─────────────────────────────────────────────────────────────
 //  Scene Painter
-//  背景漸層 → 隨機星星 → 後半圈文字 → 星球 → 前半圈文字
 // ─────────────────────────────────────────────────────────────
 class _OrbitLetter {
   final String char;
@@ -180,7 +178,7 @@ class FateLensScenePainter extends CustomPainter {
   static const String _text =
       'FateLens  Tarot  FateLens  A Join  Lens  FateLens  ';
 
-  // 背景最深色，同時也是星球底部融合色
+  // 背景深色，也是星球底部融合色
   static const Color kBgDark = Color(0xFF0E1A26);
 
   FateLensScenePainter(this.animationValue);
@@ -204,111 +202,119 @@ class FateLensScenePainter extends CustomPainter {
         ).createShader(bgRect),
     );
 
-    // ── 隨機星星 ──────────────────────────────────────────
     _drawStars(canvas, size);
 
-    // ── 3D 場景參數 ───────────────────────────────────────
-    // 星球中心偏右上，部分超出螢幕邊緣（貼近原圖）
-    final planet = Offset(size.width * 0.88, size.height * 0.38);
+    // ── 場景參數 ──────────────────────────────────────────
+    final planet = Offset(size.width * 0.88, size.height * 0.33);
     final planetR = size.width * 0.48;
-    final orbitRx = planetR * 1.15; // 軌道水平半徑
-    final orbitRy = planetR * 0.22; // 軌道垂直半徑（透視壓扁）
+    final orbitRx = planetR * 1.15;
+    final orbitRy = planetR * 0.22;
 
-    // ── 計算每個字母的 3D 位置 ─────────────────────────────
+    // ── 字母 3D 位置 ──────────────────────────────────────
     final chars = _text.characters.toList();
     final letters = <_OrbitLetter>[];
     for (int i = 0; i < chars.length; i++) {
-      final theta = (i / chars.length) * 2 * math.pi +
-          animationValue * 2 * math.pi;
+      final theta = -(i / chars.length) * 2 * math.pi
+                    - animationValue * 2 * math.pi;
       letters.add(_OrbitLetter(
         chars[i],
         orbitRx * math.cos(theta),
         orbitRy * math.sin(theta),
-        math.sin(theta), // z: -1(後) → 1(前)
+        math.sin(theta),
       ));
     }
 
-    // ── 後半圈文字（藏在球後）─────────────────────────────
+    // 後半圈
     for (final l in letters.where((l) => l.z < 0)) {
       _drawLetter(canvas, l, planet, isFront: false);
     }
 
-    // ── 星球本體 ──────────────────────────────────────────
-    _drawPlanet(canvas, planet, planetR, size);
+    // 星球
+    _drawPlanet(canvas, planet, planetR);
 
-    // ── 前半圈文字（疊在球前）─────────────────────────────
+    // 前半圈
     for (final l in letters.where((l) => l.z >= 0)) {
       _drawLetter(canvas, l, planet, isFront: true);
     }
   }
 
   // ── 星球 ──────────────────────────────────────────────────
-  void _drawPlanet(Canvas canvas, Offset c, double r, Size size) {
+  //
+  //  原圖分析：
+  //  · 球體上半部是溫暖的焦糖沙色（~#C49050）
+  //  · 球體下半部漸漸融入深藍背景（不是側邊）
+  //  · 有輕微的右上光源感
+  //  · 整顆球覆蓋明顯底片噪點
+  void _drawPlanet(Canvas canvas, Offset c, double r) {
     final rect = Rect.fromCircle(center: c, radius: r);
 
-    // 主漸層：頂部壓暗舊金 → 底部融入背景
+    // 第一層：上暖沙色 → 下融入背景（主漸層）
     canvas.drawCircle(
       c, r,
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          stops: const [0.0, 0.32, 0.65, 0.88, 1.0],
+          stops: const [0.0, 0.28, 0.58, 0.82, 1.0],
           colors: [
-            const Color(0xFF7A5C28), // 頂：暗舊金
-            const Color(0xFF5C4018), // 上中：深琥珀
-            const Color(0xFF321E06), // 下中：深棕
-            const Color(0xFF180E02), // 接近底
-            kBgDark,                  // 底：融入背景
+            const Color(0xFFC89050), // 頂部：溫暖焦糖沙色
+            const Color(0xFFAA7435), // 上中：稍深焦糖
+            const Color(0xFF7A4E1A), // 下中：深棕
+            const Color(0xFF2E1A06), // 接近底部
+            kBgDark,                  // 底部：直接融入背景
           ],
         ).createShader(rect),
     );
 
-    // 側面暗角
+    // 第二層：右上光源（疊加提亮，增加立體感）
+    canvas.drawCircle(
+      c, r,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(0.40, -0.45),
+          radius: 0.75,
+          colors: [
+            Colors.white.withValues(alpha: 0.12),
+            Colors.transparent,
+          ],
+        ).createShader(rect),
+    );
+
+    // 第三層：邊緣暗角（增加球形輪廓感）
     canvas.drawCircle(
       c, r,
       Paint()
         ..shader = RadialGradient(
           center: Alignment.center,
           radius: 1.0,
-          colors: [Colors.transparent, Colors.black.withOpacity(0.40)],
+          colors: [
+            Colors.transparent,
+            Colors.black.withValues(alpha: 0.42),
+          ],
           stops: const [0.50, 1.0],
         ).createShader(rect),
     );
 
-    // 左上微弱高光
-    canvas.drawCircle(
-      c, r,
-      Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-0.40, -0.42),
-          radius: 0.50,
-          colors: [
-            Colors.white.withOpacity(0.10),
-            Colors.transparent,
-          ],
-        ).createShader(rect),
-    );
-
-    // 星球表面噪點
+    // 第四層：表面噪點
     _drawPlanetGrain(canvas, c, r);
   }
 
   void _drawPlanetGrain(Canvas canvas, Offset c, double r) {
-    final rng = math.Random(7);
+    final rng = math.Random(17);
     final p = Paint();
     canvas.save();
     canvas.clipPath(Path()..addOval(Rect.fromCircle(center: c, radius: r)));
-    for (int i = 0; i < 2800; i++) {
+    for (int i = 0; i < 4500; i++) {
       final px = c.dx + (rng.nextDouble() * 2 - 1) * r;
       final py = c.dy + (rng.nextDouble() * 2 - 1) * r;
-      p.color = Colors.white.withOpacity(rng.nextDouble() * 0.055 + 0.008);
-      canvas.drawCircle(Offset(px, py), rng.nextDouble() * 0.7 + 0.2, p);
+      final bright = rng.nextBool();
+      p.color = (bright ? Colors.white : Colors.black)
+          .withValues(alpha: rng.nextDouble() * 0.10 + 0.02);
+      canvas.drawCircle(Offset(px, py), rng.nextDouble() * 0.8 + 0.2, p);
     }
     canvas.restore();
   }
 
-  // ── 星星（隨機，大小不一）────────────────────────────────
   void _drawStars(Canvas canvas, Size size) {
     final rng = math.Random(42);
     final p = Paint();
@@ -316,33 +322,30 @@ class FateLensScenePainter extends CustomPainter {
       final x = rng.nextDouble() * size.width;
       final y = rng.nextDouble() * size.height;
       final r = rng.nextDouble() * 1.4 + 0.2;
-      p.color = Colors.white.withOpacity(rng.nextDouble() * 0.55 + 0.18);
+      p.color = Colors.white.withValues(alpha: rng.nextDouble() * 0.55 + 0.18);
       canvas.drawCircle(Offset(x, y), r, p);
     }
   }
 
-  // ── 單個字母 ──────────────────────────────────────────────
   void _drawLetter(
     Canvas canvas,
     _OrbitLetter l,
     Offset center, {
     required bool isFront,
   }) {
-    // 近大遠小
     final scale = isFront
-        ? 0.88 + 0.18 * l.z       // 前：0.88 → 1.06
-        : 0.72 + 0.10 * l.z.abs(); // 後：0.72 → 0.82
+        ? 0.88 + 0.18 * l.z
+        : 0.72 + 0.10 * l.z.abs();
 
-    // 前亮後暗
     final opacity = isFront
-        ? (0.60 + 0.35 * l.z).clamp(0.60, 0.92)
-        : (0.18 + 0.10 * l.z.abs()).clamp(0.18, 0.28);
+        ? (0.62 + 0.30 * l.z).clamp(0.62, 0.92)
+        : (0.18 + 0.08 * l.z.abs()).clamp(0.18, 0.26);
 
     final tp = TextPainter(
       text: TextSpan(
         text: l.char,
         style: TextStyle(
-          color: Colors.white.withOpacity(opacity),
+          color: Colors.white.withValues(alpha: opacity),
           fontSize: 12.0 * scale,
           fontWeight: FontWeight.w400,
           letterSpacing: 0.2,
@@ -366,19 +369,24 @@ class FateLensScenePainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Grain Overlay（靜態，shouldRepaint = false）
+//  全畫面靜態噪點
+//
+//  使用 Positioned.fill 已保證 size 正確傳入。
+//  opacity 範圍 0.02 ~ 0.09，明顯可見但不搶主體。
+//  shouldRepaint = false，整個 App 生命週期只畫一次。
 // ─────────────────────────────────────────────────────────────
-class _GrainPainter extends CustomPainter {
+class GrainPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rng = math.Random(99);
-    final p = Paint();
-    for (int i = 0; i < 6000; i++) {
+    final p = Paint()..style = PaintingStyle.fill;
+    for (int i = 0; i < 9000; i++) {
       final x = rng.nextDouble() * size.width;
       final y = rng.nextDouble() * size.height;
-      final r = rng.nextDouble() * 0.75 + 0.25;
-      final bright = rng.nextBool() ? Colors.white : Colors.black;
-      p.color = bright.withOpacity(rng.nextDouble() * 0.052 + 0.008);
+      final r = rng.nextDouble() * 0.85 + 0.25;
+      final bright = rng.nextBool();
+      p.color = (bright ? Colors.white : Colors.black)
+          .withValues(alpha: rng.nextDouble() * 0.07 + 0.02);
       canvas.drawCircle(Offset(x, y), r, p);
     }
   }
@@ -429,10 +437,10 @@ class _StartButtonState extends State<_StartButton>
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
             border: Border.all(
-              color: Colors.white.withOpacity(0.48),
+              color: Colors.white.withValues(alpha: 0.48),
               width: 1.2,
             ),
-            color: Colors.white.withOpacity(0.06),
+            color: Colors.white.withValues(alpha: 0.06),
           ),
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
